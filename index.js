@@ -14,7 +14,15 @@ app.get('/', (req, res) => {
   res.send('Hello World!')
 })
 
+const logger = (req, res,next) =>{
+  console.log('logger middleware logged', req.params);
+  next();
+}
 
+const verifyToken = (req, res, next) => {
+ console.log('headers', req.headers);
+  next();
+}
 
 
 const uri = process.env.MONGODB_DB_URI;
@@ -80,7 +88,7 @@ const companyCollection = database.collection("companies")
      })
 
 
-     app.patch('api/companies/:id', async(req, res)=>{
+     app.patch('/api/companies/:id',logger, verifyToken, async(req, res)=>{
       const id = req.params.id
       const updatedCompany = req.body;
       const filter = {_id: new ObjectId(id)}
@@ -216,35 +224,47 @@ app.post('/api/subscriptions',async(req,res)=>{
 
 
 
-
-  //inefficeient way to join/aggregate collection
-   app.get('/api/companies', async (req, res) => {
-            const cursor = companyCollection.find();
-            const companies = await cursor.toArray();
-
-            for (const company of companies) {
-                const filter = {
-                    companyId: company._id.toString()
+ app.get('/api/companies2', async (req, res) => {
+            const pipeline = [
+                {
+                    $skip: 5
+                },
+                {
+                    $limit: 2
                 }
-                const jobCount = await jobCollection.countDocuments(filter)
-                company.jobCount = jobCount
-            }
+            ];
 
-            res.send(companies);
+            const cursor = companyCollection.aggregate(pipeline);
+            const result = await cursor.toArray();
+            res.send(result)
         })
 
-  //inefficeient way to join/aggregate collection
-   app.get('/api/companies2', async (req, res) => {
-           const pipeline =[
-            {
-              $skip: 5
-            }
-           ]
-           const cursor = companyCollection.aggregate(pipeline);
-           const result = await cursor.toArray();
-           res.send(result)
-        })
+        app.get('/api/stats', async (req, res) => {
+            const pipeline = [
+                {
+                    $group: {
+                        _id: '$jobType',
+                        count: {
+                            $sum: 1
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        jobType: '$_id',
+                        _id: 0,
+                        count: 1
+                    }
+                },
+                {
+                    $sort: { count: 1 }
+                }
+            ]
 
+            const cursor = jobCollection.aggregate(pipeline);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
